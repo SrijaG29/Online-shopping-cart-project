@@ -1,0 +1,156 @@
+/* initially insertion must be done on inventory where all the products must be available
+no need to put them according to category.
+
+Important thing is every time if we add new product the same product must be inserted into inventory and the quantity can be independant*/
+
+create table InventoryManagement_shopping(product_id number, quantityIN_stock number, last_updated date);
+create table refill_product_log(product_id number,quantity number);
+--drop table refill_product_log;
+--select * from refill_product_log;
+--drop type urgent_refill_rec;
+
+
+---- COLLECTING THE INFORMATION OF PRODUCTS THAT ARE LESS THAN THE EXPECTED STOCK
+---- CONCENTRATES COMPLETELY ON PRODUCTS_SHOPPING TABLE
+create or replace procedure refilling_process(refill_product_id number) is
+type urgent_refill_rec is record (
+    product_id number,
+    product_quantity number
+);
+type urgent_refill is table of urgent_refill_rec;
+v_refill urgent_refill := urgent_refill();
+v_quantity number;
+v_product_id number;
+begin
+    delete from refill_product_log;
+    for i in (select product_id,quantity_in_stock  from products_shopping where quantity_in_stock<=5 and refill_product_id=product_id) loop
+        v_refill.extend;
+        v_refill(v_refill.last).product_id:=i.product_id;
+        v_refill(v_refill.last).product_quantity:=i.quantity_in_stock;
+    end loop;
+    for j in 1..v_refill.count loop
+        insert into refill_product_log values(v_refill(j).product_id,v_refill(j).product_quantity);
+    end loop;
+    for restoring in (select product_id from refill_product_log) loop
+        update products_shopping set quantity_in_stock=quantity_in_stock+10 where product_id =restoring.product_id;
+    end loop;
+    exception
+        when No_data_found then
+            dbms_output.put_line('All the products are up to the mark');
+end;
+
+-- TO CHECK THE AVBOE PROCEDURE
+DECLARE
+    CURSOR c_products_shopping IS SELECT product_id FROM products_shopping WHERE quantity_in_stock <= 5;
+    v_product_id c_products_shopping%ROWTYPE;
+BEGIN
+    OPEN c_products_shopping;
+    LOOP
+        FETCH c_products_shopping INTO v_product_id;
+        EXIT WHEN c_products_shopping%NOTFOUND;
+        refilling_process(v_product_id.product_id);
+        DBMS_OUTPUT.PUT_LINE('Restocking process initiated for Product ID: ' || v_product_id.product_id);
+    END LOOP;
+    CLOSE c_products_shopping;
+END;
+
+
+
+--- NEXT STEP IS, IF WE HAVE PRODUCTS NOT MEETING STOCK DEMAND THEY WILL BE IN Refill_product_log
+
+begin
+    for i in (select product_id from refill_product_log) loop
+        update InventoryManagement_shopping set quantityIN_stock=quantityIN_stock+10 where product_id=i.product_id;
+        dbms_output.put_line('Inventory stock for the product with ID '||i.product_id||' has been Increased');
+    end loop;
+    delete from refill_product_log;
+end;
+
+
+
+create or replace trigger updating_inventory
+before update on products_shopping
+for each row
+begin
+    declare
+        v_quantityIN_stock number;
+    begin
+        select quantityIN_stock into v_quantityIN_stock from inventoryManagement_shopping where product_id=:new.product_id;
+        if v_quantityIN_stock>10 then
+            update InventoryManagement_shopping set quantityIN_stock = quantityIN_stock-10 where product_id=:new.product_id;
+            update InventoryManagement_shopping set last_updated = sysdate where product_id=:new.product_id;
+        else
+            raise_application_error(-20021,'Alter the update cannot be processed, Please refill the inventory first');
+        end if;
+        exception
+            when others then
+                dbms_output.put_line(sqlerrm);
+    end;
+end;
+
+
+begin
+    for i in (select product_id from refill_product_log) loop
+        update InventoryManagement_shopping set quantityIN_stock=quantityIN_stock+10 where product_id=i.product_id;
+        dbms_output.put_line('Inventory stock for the product with ID '||i.product_id||' has been Increased');
+    end loop;
+    delete from refill_product_log;
+end;
+
+select * from products_shopping;
+select * from refill_product_log;
+select * from InventoryManagement_shopping;
+
+update products_shopping set quantity_in_stock=2 where name ='Blender';
+
+
+begin
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (1, 50, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (2, 30, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (3, 100, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (4, 200, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (5, 150, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (6, 75, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (7, 120, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (8, 80, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (9, 60, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (10, 300, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (11, 40, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (12, 20, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (13, 70, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (14, 25, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (15, 90, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (16, 70, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (17, 60, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (18, 45, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (19, 80, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (20, 200, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (21, 150, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (22, 30, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (23, 90, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (24, 100, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (25, 35, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (26, 50, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (27, 70, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (28, 40, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (29, 75, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (30, 60, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (31, 25, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (32, 200, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (33, 300, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (34, 30, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (35, 50, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (36, 40, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (37, 80, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (38, 100, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (39, 70, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (40, 60, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (41, 50, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (42, 30, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (43, 90, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (44, 70, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (45, 20, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (46, 40, SYSDATE);
+INSERT INTO InventoryManagement_shopping (product_id, quantityIN_stock, last_updated) VALUES (47, 20, SYSDATE);
+
+end;

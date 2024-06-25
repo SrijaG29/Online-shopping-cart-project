@@ -1,0 +1,231 @@
+
+
+-- To test the procedure
+
+
+-- select * from payment_success_log;
+-- select * from cart_items_shopping;
+
+CREATE OR REPLACE PROCEDURE payment_processing (status VARCHAR2) IS
+    TYPE payment_record IS RECORD (
+        order_id VARCHAR2(100),
+        user_id VARCHAR2(20),
+        product_id NUMBER,
+        product_name VARCHAR2(30),
+        quantity NUMBER,
+        total_price NUMBER,
+        discount_id VARCHAR2(30),
+        shipping_cost NUMBER,
+        GST NUMBER
+    );
+ 
+    TYPE payment_table IS TABLE OF payment_record;
+    v_payment_table payment_table := payment_table();
+    failured EXCEPTION;
+    v_time TIMESTAMP WITH TIME ZONE;
+    v_total_sum NUMBER := 0;
+    v_discount NUMBER;
+    v_shipping_fees NUMBER := 0;
+    v_taxes NUMBER := 0;
+    v_coupon VARCHAR2(30);
+    coupon_price NUMBER := 0;
+    cart_empty NUMBER := 0;
+    empty_exception EXCEPTION;
+    is_new_user number:= 1;
+BEGIN
+    v_time := SYSTIMESTAMP AT TIME ZONE 'Asia/Kolkata';
+ 
+    IF status = 'failed' THEN
+        RAISE failured;
+    END IF;
+ 
+    DECLARE 
+        cart_empty NUMBER := 0;
+        empty_exception EXCEPTION;
+    BEGIN
+        FOR i IN (SELECT cart_id FROM cart_items_shopping) LOOP 
+            cart_empty := i.cart_id;
+        END LOOP;
+ 
+        IF cart_empty = 0 THEN
+            RAISE empty_exception;
+        END IF;
+ 
+        DBMS_OUTPUT.PUT_LINE('------------------------------------------------------------------------------');
+        DBMS_OUTPUT.PUT_LINE('                        Payment processed successfully                        ');
+        DBMS_OUTPUT.PUT_LINE('------------------------------------------------------------------------------');
+        DBMS_OUTPUT.PUT_LINE('Product_id          product_name           quantity     Rs.');
+ 
+        -- Calculating the total sum of prices in the cart
+        FOR j IN (SELECT p.price AS price, c.quantity AS quantity 
+                  FROM cart_items_shopping c 
+                  JOIN products_shopping p ON c.product_id = p.product_id) LOOP
+            v_total_sum := v_total_sum + (j.price * j.quantity);
+        END LOOP;
+ 
+        -- Filling the payment_table with cart details
+        FOR i IN (SELECT s.user_id AS user_id, c.product_id AS product_id, p.name AS product_name,
+                         c.quantity AS quantity, p.price AS price 
+                  FROM cart_items_shopping c 
+                  JOIN shopping_carts s ON c.cart_id = s.cart_id 
+                  JOIN products_shopping p ON p.product_id = c.product_id) LOOP
+ 
+            DBMS_OUTPUT.PUT_LINE(i.product_id || '                  ' || i.product_name || '                 ' || i.quantity || '             ' || i.price);
+            IF v_total_sum > 2000 THEN
+            SELECT discount_amount INTO v_discount FROM discounts_shopping WHERE discount_id = 'discount3';
+        ELSIF v_total_sum BETWEEN 1000 AND 2000 THEN
+            SELECT discount_amount INTO v_discount FROM discounts_shopping WHERE discount_id = 'discount2';
+        ELSE
+            SELECT discount_amount INTO v_discount FROM discounts_shopping WHERE discount_id = 'discount1';
+        END IF;
+ 
+        -- Applying shipping based on total sum
+        IF v_total_sum < 500 THEN
+            v_shipping_fees := v_shipping_fees + 50;
+        ELSE 
+            v_shipping_fees := 0;
+        END IF;
+ 
+        -- Applying Taxes(GST) based on total sum
+        IF v_total_sum > 2000 THEN
+            v_taxes := 0.08;
+        ELSIF v_total_sum BETWEEN 1000 AND 2000 THEN
+            v_taxes := 0.04;
+        ELSE 
+            v_taxes := 0.02;
+        END IF;
+ 
+        -- Checking if the user is new and applying coupon
+        DECLARE
+            is_new_user number:= 1;
+        BEGIN
+            FOR i IN (SELECT DISTINCT s.user_id 
+                      FROM cart_items_shopping c 
+                      JOIN shopping_carts s ON c.cart_id = s.cart_id) LOOP
+                    SELECT 1 INTO is_new_user FROM dual WHERE i.user_id IN (SELECT user_id FROM orders_shopping);
+                    is_new_user := 0;
+                    END LOOP;
+                if is_new_user = 0 then
+                    IF v_total_sum BETWEEN 1000 AND 2000 THEN
+                        v_coupon := 'NAYA-GHAR-10';
+                        SELECT coupon_value INTO coupon_price FROM coupon_shopping WHERE coupon_code = v_coupon;
+                    ELSE
+                        v_coupon := 'NAYA-GHAR-20';
+                        SELECT coupon_value INTO coupon_price FROM coupon_shopping WHERE coupon_code = v_coupon;
+                    END IF;
+                END IF;
+                EXCEPTION
+                    WHEN NO_DATA_FOUND THEN
+                        is_new_user := 1;
+                        v_coupon := 'NEW NAYA-GHAR';
+                        SELECT coupon_value INTO coupon_price FROM coupon_shopping WHERE coupon_code = v_coupon;
+                END;
+ 
+            -- Extending the collection to hold the new payment record
+            v_payment_table.EXTEND;
+            -- Assigning values to the extended collection element
+            v_payment_table(v_payment_table.LAST).order_id := i.user_id || ' ' || TO_CHAR(v_time, 'YYYYMMDDHH24MISSFF');
+            v_payment_table(v_payment_table.LAST).user_id := i.user_id;
+            v_payment_table(v_payment_table.LAST).product_id := i.product_id;
+            v_payment_table(v_payment_table.LAST).product_name := i.product_name;
+            v_payment_table(v_payment_table.LAST).quantity := i.quantity;
+            v_payment_table(v_payment_table.LAST).total_price := i.price * i.quantity;
+            if i.price * i.quantity > 500 and i.price * i.quantity <1000 then
+                v_payment_table(v_payment_table.LAST).discount_id := 'discount1';
+            elsif i.price * i.quantity >1000 and i.price * i.quantity <2000 then
+                v_payment_table(v_payment_table.LAST).discount_id := 'discount2'; 
+            else
+                v_payment_table(v_payment_table.LAST).discount_id := 'discount3'; 
+            end if;
+            v_payment_table(v_payment_table.LAST).shipping_cost := 0;
+            v_payment_table(v_payment_table.LAST).gst := 10;
+        END LOOP;
+ 
+        DBMS_OUTPUT.PUT_LINE('------------------------------------------------------------------------------');
+ 
+        -- Applying discounts based on total sum
+        DBMS_OUTPUT.PUT_LINE('                             Total : ' || v_total_sum);
+        DBMS_OUTPUT.PUT_LINE('                             Discount amount : ' || v_discount);
+        DBMS_OUTPUT.PUT_LINE('                             Shipping amount : ' || v_shipping_fees);
+        DBMS_OUTPUT.PUT_LINE('                             GST Percentage : ' || v_taxes);
+        DBMS_OUTPUT.PUT_LINE(' Congratulations! Coupon ' || v_coupon || ' Applied, which has Rs. ' || coupon_price);
+        DBMS_OUTPUT.PUT_LINE('                             Grand total : ' || (v_total_sum - (v_total_sum * (v_discount / 100)) - v_shipping_fees - coupon_price));
+        DBMS_OUTPUT.PUT_LINE('----------- Thanks for shopping on NAYA - GHAR ------------');
+ 
+        -- Insert records into payment_success_log
+        FOR i IN 1..v_payment_table.COUNT LOOP
+            INSERT INTO payment_success_log (
+                order_id,
+                user_id,
+                product_id,
+                product_name,
+                quantity,
+                total_price,
+                discount_id,
+                shipping_cost,
+                GST
+            ) VALUES (
+                v_payment_table(i).order_id,
+                v_payment_table(i).user_id,
+                v_payment_table(i).product_id,
+                v_payment_table(i).product_name,
+                v_payment_table(i).quantity,
+                v_payment_table(i).total_price,
+                v_payment_table(i).discount_id,
+                v_payment_table(i).shipping_cost,
+                v_payment_table(i).gst
+
+            );
+            dbms_output.put_line(v_payment_table(i).order_id||
+                v_payment_table(i).user_id||
+                v_payment_table(i).product_id||
+                v_payment_table(i).product_name||
+                v_payment_table(i).quantity||
+                v_payment_table(i).total_price||
+                v_payment_table(i).discount_id||
+                v_payment_table(i).shipping_cost||
+                v_payment_table(i).gst);
+        END LOOP;
+    EXCEPTION
+        WHEN empty_exception THEN
+            DBMS_OUTPUT.PUT_LINE('Your cart is empty!');
+    END;
+EXCEPTION
+    WHEN others THEN
+        DBMS_OUTPUT.PUT_LINE('Payment has been denied! Please try again');
+END;
+
+
+-- To test the procedure
+declare
+    proceed_to_payment varchar2(20):= :proceed_to_payment;
+    v_cart_id number;
+    t_user_name varchar2(100):= :t_user_name;
+    t_cart_id number;
+    choice varchar2(30);
+BEGIN
+    if lower(:proceed_to_payment)= 'yes' then
+        select cart_id into t_cart_id from shopping_carts where user_id = (select user_id from users where username = t_user_name);
+        choice := processing_items_to_payments(proceed_to_payment,t_cart_id);
+        payment_processing(choice);
+        select distinct(cart_id) into v_cart_id from payment_success_log p join shopping_carts s on s.user_id=p.user_id;
+        --dbms_output.put_line(v_cart_id||' HIIIIIIIIIIIIIIII');
+        delete from cart_items_shopping where cart_id =v_cart_id;
+        DELETE FROM payment_success_log;
+    end if;
+    exception
+        when others then
+            dbms_output.put_line('Search and add items into cart to shop more!');
+END;
+
+select * from orders_shopping;
+select * from order_items_shopping;
+select * from order_status_updates_shopping;t
+select * from shipping_notification_shopping;
+select * from payment_success_log;
+select * from cart_items_shopping;
+select * from products_shopping;
+
+alter trigger insertion_of_values_into_orders disable;
+
+desc payment_success_log;

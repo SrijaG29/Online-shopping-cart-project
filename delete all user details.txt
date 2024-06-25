@@ -1,0 +1,187 @@
+--delete all user details
+
+select * from tab
+
+
+
+drop trigger deletion_of_user;
+
+
+
+--creating a procedure to delete all the details of the user when user get deleted.
+
+
+
+create or replace procedure delete_all_user_details(deleted_user_name varchar2) 
+is
+    t_cart_id number;
+    t_order_id number;
+    deleted_user_id varchar2(100);
+    --nested table to store multiple order_id of particular user.
+    type no_of_orders_type is table of varchar2(50);
+    no_of_orders no_of_orders_type := no_of_orders_type();
+begin
+    select user_id into deleted_user_id from users where username = deleted_user_name;
+    dbms_output.put_line(deleted_user_id);
+    --selecting order_id('s) of that particular user to delete order_items and order and shipping notifications of that user.\
+    for i in (select order_id from orders_shopping where user_id = deleted_user_id) loop 
+        no_of_orders.extend;
+        no_of_orders(no_of_orders.last) := i.order_id;
+    end loop;
+
+
+
+    --deleting the order item('s) that were done by user by using order_id('s) which belong to that user.
+    for i in 1..no_of_orders.count loop
+        delete from order_items_shopping where order_id = no_of_orders(i);
+    end loop;
+
+
+
+    --deleting the shipping details that were done by user by using order_id('s) which belong to that user.
+    for i in 1..no_of_orders.count loop
+        delete from shipping_notifications_shopping where order_id = no_of_orders(i);
+    end loop;
+
+
+
+    --deleting the order status details that were done by user by using order_id('s) which belong to that user.
+    for i in 1..no_of_orders.count loop
+        delete from order_status_updates_shopping where order_id = no_of_orders(i);
+    end loop;
+
+
+
+    --selecting cart_id of that particular user to delete the items in the cart which belong to that cart id.
+    select cart_id into t_cart_id from shopping_carts where user_id = deleted_user_id;
+    dbms_output.put_line(t_cart_id);
+
+
+
+    --deleting items that were added by the user by using the cart id which belong to that particular user.
+    delete from cart_items_shopping where cart_id = t_cart_id;
+
+
+
+    --deleting payment deltails that were done by the user by using the cart id which belong to that particular user.
+    delete from payments_shopping where cart_id = t_cart_id;
+
+
+
+    --deleting cart_id which belong to that user.
+    delete from shopping_carts where user_id = deleted_user_id;
+
+
+
+    --deleting order details that were done by users using user_id which belong to that user.
+    delete from orders_shopping where user_id = deleted_user_id;
+
+
+
+    --deleteing the product recommendations that belong particular user by using user_id
+    delete from product_recommendations_shopping where user_id = deleted_user_id;
+
+
+
+    --deleteing user from users table
+    delete from users where username = deleted_user_name;
+end;
+
+
+declare 
+    user_name varchar2(100) := :enter_username;
+begin
+    delete_all_user_details(user_name);
+exception 
+    when no_data_found then
+        dbms_output.put_line('Invalid Username.');
+    when others then 
+        dbms_output.put_line(SQLCODE||' '||SQLERRM);
+end;
+
+
+
+
+
+select * from shopping_carts;
+select * from users;
+select * from cart_items_shopping;
+select * from product_recommendations_shopping
+insert into users values('user64','SrinivasanP','Srini@11','palayanursrini@gmail.com','Srinivasan',
+                  'Palayanur','Housing Board','7890654321');
+
+
+
+delete from users where user_id = 'user64';
+
+
+
+begin
+
+
+
+insert into cart_items_shopping values(81,1,1);
+insert into cart_items_shopping values(81,2,1);
+
+
+
+insert into payments_shopping values ('payment'||to_char(payment_id_seq.nextval),81,'Debit card','Payment done',
+                               'transaction'||to_char(transaction_id_seq.nextval),sysdate); --payment1
+insert into payments_shopping values ('payment'||to_char(payment_id_seq.nextval),81,'Debit card','Payment done',
+                               'transaction'||to_char(transaction_id_seq.nextval),sysdate);    --payment21    
+
+
+
+insert into orders_shopping values('order'||to_char(order_id_seq.nextval),'user64',5000,50,0,'discount1');   --order4
+insert into orders_shopping values('order'||to_char(order_id_seq.nextval),'user64',500,50,50,'discount1');   --order21
+
+
+
+insert into discounts_shopping values('discount'||to_char(discount_id_seq.nextval),1234,75,sysdate);
+
+
+
+
+
+insert into order_items_shopping values ('order_item_id'||to_Char(order_item_id_seq.nextval),'order43',1,1,15500);
+insert into order_items_Shopping values ('order_item_id'||to_Char(order_item_id_seq.nextval),'order43',2,1,1400);
+insert into order_items_Shopping values ('order_item_id'||to_Char(order_item_id_seq.nextval),'order61',2,1,1400);
+insert into order_items_shopping values ('order_item_id'||to_Char(order_item_id_seq.nextval),'order61',1,1,15500);
+
+
+
+insert into shipping_notifications_shopping values ('notification_id'||to_char(notification_id_seq.nextval),'order43','Delivered',1234,sysdate);
+insert into shipping_notifications_shopping values ('notification_id'||to_char(notification_id_seq.nextval),'order61','Delivered',1235,sysdate);
+
+
+
+insert into order_status_updates_shopping values ('status_update_id'||to_char(status_update_id_seq.nextval),'order43','Delivered',sysdate);
+insert into order_status_updates_shopping values ('status_update_id'||to_char(status_update_id_seq.nextval),'order61','Delivered',sysdate);
+
+
+
+insert into product_recommendations_shopping values('recommendation'||to_char(recommendation_id_seq.nextval),'user64',1);
+
+
+
+end;
+select * from products_shopping where product_id=2;
+select cart_id from shopping_carts where user_id='user64';
+select * from cart_items_shopping where cart_id = 44;
+delete from cart_items_shopping where cart_id = 44;
+select * from products_shopping;
+select * from users;
+select * from shopping_carts;
+select * from cart_items_shopping;
+select * from payments_shopping;
+select * from discounts_shopping;
+select * from orders_shopping;
+select * from order_items_shopping;
+desc cart_items_shopping; cart_id,product_id,qunatity
+desc payments_shopping;
+desc orders_shopping;
+desc discounts_shopping;
+desc order_items_shopping;
+desc shipping_notifications_shopping;
+desc order_status_updates_shopping;
+desc product_recommendations_shopping;

@@ -1,0 +1,40 @@
+select * from payment_success_log;
+
+desc orders_shopping;
+desc order_items_shopping;
+desc payment_success_log;
+select * from products_shopping;
+
+
+create or replace trigger insertion_of_values_into_orders 
+after insert on payment_success_log
+for each row 
+declare
+price_of_product number;
+begin
+    select price into price_of_product from products_shopping where product_id = :new.product_id;
+
+    begin
+        insert into orders_shopping values(:new.order_id,:new.user_id,:new.total_price,:new.gst,:new.shipping_cost,:new.discount_id);
+    exception
+        when others then
+            null;
+    end;
+    insert into order_items_shopping values(:new.order_id,:new.product_id,:new.quantity,price_of_product);
+exception
+    when no_data_found then
+        dbms_output.put_line('No cart items');
+end;
+/
+
+BEGIN
+    payment_processing('success');
+END;
+
+alter table order_items_shopping
+drop column ORDER_ITEM_ID;
+
+select * from orders_shopping;
+select * from order_items_shopping;
+
+alter table payment_success_log disable all triggers;

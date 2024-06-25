@@ -1,0 +1,74 @@
+--create table guest_shopping_log(username varchar2(20),visited_time timestamp);
+select * from guest_shopping_log;
+--delete from guest_shopping_log;
+create or replace procedure guest_user is
+type guest_log_rec is record(
+    guest_id varchar2(20),
+    login_time timestamp
+);
+type guest_log_table is table of guest_log_rec;
+v_guest_logs guest_log_table:=guest_log_table();
+v_permanent_guest_id VARCHAR2(20):='user1';
+v_hello_message VARCHAR2(20) := 'Guest';
+hello_message varchar2(20):='Guest';
+v_log_time TIMESTAMP WITH TIME ZONE;
+begin
+    v_guest_logs.extend;
+    v_guest_logs(v_guest_logs.last).guest_id:=v_permanent_guest_id||' '||sysdate;
+    v_log_time :=  SYSTIMESTAMP AT TIME ZONE 'Asia/Kolkata';
+    v_guest_logs(v_guest_logs.last).login_time:=v_log_time;
+    for i in 1..v_guest_logs.count loop
+        insert into guest_shopping_log (username,visited_time)
+        values(v_guest_logs(i).guest_id,v_guest_logs(i).login_time);
+    end loop;
+
+    -- back to Guest personalized cart page
+    get_products_with_category(hello_message);
+end;
+
+begin
+    guest_user;
+end;
+
+CREATE OR REPLACE FUNCTION get_visits_by_year(p_visit_year NUMBER) RETURN guest_visit_table IS
+    v_guest_visits guest_visit_table := guest_visit_table();
+BEGIN
+    FOR rec IN (
+        SELECT username || ' visited on ' || TO_CHAR(visited_time, 'DD-MON-YYYY HH24:MI:SS') AS visit_info
+        FROM guest_shopping_log
+        WHERE EXTRACT(YEAR FROM visited_time) = p_visit_year
+    ) LOOP
+        v_guest_visits.EXTEND;
+        v_guest_visits(v_guest_visits.LAST) := rec.visit_info;
+    END LOOP;
+
+    RETURN v_guest_visits;
+END get_visits_by_year;
+
+
+create or replace type guest_visit_table as table of varchar2(100);
+create or replace function get_visited_year(p_visit_month number,p_visit_year number) return guest_visit_table
+is v_guest_visit_table guest_visit_table:=guest_visit_table();
+begin
+    for i in (SELECT username || ' visited on ' || TO_CHAR(visited_time, 'DD-MON-YYYY HH24:MI:SS') AS visit_info
+        FROM guest_shopping_log
+        WHERE EXTRACT(MONTH FROM visited_time) = p_visit_month
+          AND EXTRACT(YEAR FROM visited_time) = p_visit_year)
+    loop
+        v_guest_visit_table.extend;
+        v_guest_visit_table(v_guest_visit_table.last):= i.visit_info;
+    end loop;
+    return v_guest_visit_table;
+end get_visited_year;
+
+DECLARE
+    v_visits guest_visit_table;
+BEGIN
+    -- Call the function for a specific month and year
+    v_visits := get_visited_year(06, 2024); -- For June 2024
+
+    -- Display the results
+    FOR i IN 1 .. v_visits.COUNT LOOP
+        DBMS_OUTPUT.PUT_LINE(v_visits(i));
+    END LOOP;
+END;

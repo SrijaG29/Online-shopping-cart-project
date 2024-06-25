@@ -1,0 +1,84 @@
+select * from products_shopping
+
+create or replace function processing_items_to_payments(choice varchar2,t_cart_id number) return varchar2
+is
+    -- choice varchar2(100) := 'Yes';
+    prod_count number := 0;
+    temp_count number := 0;
+    stock_product_id number;
+    stock_product_quantity number;
+    stock_product_name varchar2(100);
+    temp number;
+    /*type r_type is record (
+        prod_id products_shopping.product_id%type,
+        prod_name products_shopping.name%type
+    );
+    r_var r_type;*/
+    type c_type is table of varchar2(100) index by pls_integer;
+    c_var c_type;
+    c_key pls_integer;
+begin 
+    if choice = 'Yes' then 
+        --select 1 into temp from cart_items_shopping where cart_id = t_cart_id;
+        for i in (select product_id,quantity from cart_items_shopping where cart_id = t_cart_id) loop
+            select product_id,quantity_in_stock,name into stock_product_id,stock_product_quantity,stock_product_name 
+            from products_shopping where product_id = i.product_id;
+            temp_count := temp_count + 1;
+            if i.quantity <= stock_product_quantity then 
+                prod_count := prod_count + 1 ;
+            else
+                c_var(i.product_id) := stock_product_name;
+            end if;
+        end loop;
+
+        -- dbms_output.put_line(prod_count||' '||temp_count);
+        if prod_count = temp_count then 
+            return 'Success';
+        else 
+            c_key := c_var.first;
+            dbms_output.put_line('These product or products are out of stock');
+            while c_key is not null loop
+                dbms_output.put_line('product_id is: '||c_key||' and product name is: '||c_var(c_key));
+                c_key := c_var.next(c_key);
+            end loop;
+            return 'Failure';
+        end if;
+    else 
+        return 'The choice is not yes';
+    end if;
+exception 
+    when no_data_found then 
+        return 'No items in the cart';
+end;
+
+select * from products_shopping;
+
+declare 
+    choice varchar2(100) := :val;
+    t_user_name varchar2(100):= :enter_user_name;
+    t_cart_id number;
+    output varchar2(100);
+begin 
+    select cart_id into t_cart_id from shopping_carts where user_id = (select user_id from users where username = t_user_name);
+    output := processing_items_to_payments(choice,t_cart_id);
+    if output = 'No items in the cart' then 
+        dbms_output.put_line('There is no cart items in your cart');
+    elsif output = 'Success' THEN 
+        dbms_output.put_line('You can proceed with payment');
+        dbms_output.put_line('These are the products that you want to purchase');
+        dbms_output.put_line('Total cost is :'||viewing_cart_items(t_user_name,t_cart_id));
+    else 
+        dbms_output.put_line('These items will not be proceeded to payments: ' || output);
+    end if;
+exception 
+    when no_data_found then
+        dbms_output.put_line('Invalid Username.');
+end;
+
+select * from cart_items_shopping
+select * from payments_shopping;
+select * from products_shopping where product_id=1;
+update products_shopping set QUANTITY_IN_STOCK = 2 where product_id = 1;
+update products_shopping set QUANTITY_IN_STOCK = 50 where product_id = 1;
+
+select * from product_categories_shopping;
