@@ -1,4 +1,9 @@
 # Online-shopping-cart-project
 
 I collaborated within 4-member team on this online shopping cart application. 
-I have developed procedures, functions, triggers, cursors, packages so that user can login, search for the products, add items into the cart, view the items in the cart, proceed to payments, make payment, reduce the products quantity from products tabel, get the user recommendations based on the products they have purchased.
+Developed an online shopping cart application with functionalities for user login, product search, and cart management.
+Created procedures, functions, triggers, and cursors for efficient backend operations.
+Implemented packages to handle user login, product searches, and cart item management.
+Enabled users to add items to the cart, view cart contents, and proceed to payments.
+Developed payment processing functionality, reducing product quantity in the database upon successful transactions.
+Integrated user recommendation system based on purchase history.
